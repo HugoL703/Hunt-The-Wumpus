@@ -2,6 +2,7 @@ import discord
 import bat, pit, player, wumpus
 import random
 import os
+import game
 from dotenv import load_dotenv
 from discord.ext import commands
 
@@ -59,6 +60,15 @@ async def ogrules(ctx):
                    'ROOM AWAY FROM WUMPUS OR ANY HAZARD, THE COMPUTER SAYS:\n\nWUMPUS - \'YOU CAN SMELL A HORRIBLE STENCH...\'\n\nBAT - '
                    '\'YOU HEAR FLAPPING IN THE DISTANCE...\'\n\nPIT - \'YOU CAN FEEL A GUST OF AIR NEARBY...\'```')
 
+
+@client.command()
+async def sgame(ctx):
+    g = game.Game(client)
+    g.initial()
+    while g.pl1.isAlive and not g.pl1.isWinner:
+        await g.gameloop(ctx)
+
+# TODO: Sortout playing commands and better tell the player who is currently in game. Player queue?
 
 @client.command()
 async def play(ctx):

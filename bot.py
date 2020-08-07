@@ -9,7 +9,7 @@ load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
 
 client = commands.Bot(command_prefix='w!')
-
+current_player = None
 
 @client.event
 async def on_ready():
@@ -59,5 +59,30 @@ async def ogrules(ctx):
                    'ROOM AWAY FROM WUMPUS OR ANY HAZARD, THE COMPUTER SAYS:\n\nWUMPUS - \'YOU CAN SMELL A HORRIBLE STENCH...\'\n\nBAT - '
                    '\'YOU HEAR FLAPPING IN THE DISTANCE...\'\n\nPIT - \'YOU CAN FEEL A GUST OF AIR NEARBY...\'```')
 
+
+@client.command()
+async def play(ctx):
+    global current_player
+    print('LOG: ' + str(ctx.author) + ' requested "PLAY"')
+    if current_player is None:
+        current_player = ctx.author
+        await ctx.send('@' + str(ctx.author) + ' is registered as playing.')
+    elif ctx.author == current_player:
+        await ctx.send('You are already playing!')
+    else:
+        await ctx.send('Sorry @' + str(ctx.author) + ', @' + str(current_player) + ' is currently playing.')
+
+
+@client.command()
+async def quit(ctx):
+    global current_player
+    print('LOG: ' + str(ctx.author) + ' requested "QUIT"')
+    if current_player is None:
+        await ctx.send('No one is playing!')
+    elif current_player != ctx.author:
+        await ctx.send('You are not playing!')
+    else:
+        await ctx.send('Game ended')
+        current_player = None
 
 client.run(token)

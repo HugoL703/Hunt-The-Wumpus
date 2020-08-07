@@ -3,6 +3,7 @@ import bat
 import pit
 import wumpus
 import player
+import asyncio
 
 
 class Game:
@@ -14,7 +15,10 @@ class Game:
     p2 = pit.Pit()
     w1 = wumpus.Wumpus()
 
-    def reset(self): # used on new game
+    def __init__(self, client):
+        self.client = client
+
+    def reset(self):  # used on new game
         self.pl1.current_room = -1
         self.w1.current_room = -1
         self.b1.current_room = -1
@@ -66,7 +70,7 @@ class Game:
         return rmap[current_room - 1]
 
     ''' How a turn should work:
-    
+
         End game if in pit/wumpus/out of arrows
         Move player if in bat
         Warn player of adjacent hazards
@@ -80,36 +84,39 @@ class Game:
         >>>> Player, miss, wumpus?
         '''
 
-    def gameloop(self):
+    async def gameloop(self, ctx):
 
         if self.pl1.arrows == 0:  # Check if player can continue or if they are out of arrows
-            print('')
-            print('You ran out of arrows...')
+            await ctx.send('You ran out of arrows...')
             self.pl1.isAlive = False
             return
         # inform the player of their room, adjacent rooms, and adjacent hazards, and arrow count
-        print('')
-        print('You are in room ' + str(self.pl1.current_room))
-        print('The rooms next to you are ' + str(Game.adjacent_rooms(self.pl1.current_room)))
-        print('You have ' + str(self.pl1.arrows) + ' arrows')
+        await ctx.send('You are in room ' + str(self.pl1.current_room))
+        await ctx.send('The rooms next to you are ' + str(Game.adjacent_rooms(self.pl1.current_room)))
+        await ctx.send('You have ' + str(self.pl1.arrows) + ' arrows')
         if self.p1.current_room in Game.adjacent_rooms(self.pl1.current_room) or self.p2.current_room in \
                 Game.adjacent_rooms(self.pl1.current_room):
-            print('You can feel a gust of air nearby...')
+            await ctx.send('You can feel a gust of air nearby...')
         if self.b1.current_room in Game.adjacent_rooms(self.pl1.current_room) or self.b2.current_room in \
                 Game.adjacent_rooms(self.pl1.current_room):
-            print('You hear flapping in the distance...')
+            await ctx.send('You hear flapping in the distance...')
         if self.w1.current_room in Game.adjacent_rooms(self.pl1.current_room):
-            print('You can smell a horrible stench...')
+            await ctx.send('You can smell a horrible stench...')
 
         action = None
         choice = None
         # Player's turn choice, shoot an arrow or move rooms
         while str.upper(str(action)) != 'M' and str.upper(str(action)) != 'S':
-            action = input('Shoot or Move? (S/M) ')
+            await ctx.send('Shoot or Move? (S/M) ')
+            message = await self.client.wait_for('message', check=lambda
+                message: message.author == ctx.author and message.content.lower() in ['m', 's'])
+            action = message.content
 
         if str.upper(str(action)) == 'M':
             while choice not in Game.adjacent_rooms(self.pl1.current_room):
-                choice = input('Move to which room? ')
+                await ctx.send('Move to which room?')
+                message = await self.client.wait_for('message', check=lambda message: message.author == ctx.author)
+                choice = message.content
                 try:
                     int(choice)
                 except ValueError:
@@ -120,22 +127,24 @@ class Game:
 
             if choice == self.b1.current_room or choice == self.b2.current_room:
                 print()
-                print('A bat picked you up and moved you to a random room!')
+                await ctx.send('A bat picked you up and moved you to a random room!')
                 self.pl1.current_room = random.choice(self.rooms)
 
             elif choice == self.p1.current_room or choice == self.p2.current_room:
                 print()
-                print('You fell down a pit...')
+                await ctx.send('You fell down a pit...')
                 self.pl1.isAlive = False
 
             elif choice == self.w1.current_room:
-                print('You stepped into the Wumpus\'s room and startled him!')
+                await ctx.send('You stepped into the Wumpus\'s room and startled him!')
                 print()
                 self.pl1.isAlive = False
 
         elif str.upper(str(action)) == 'S':
             while choice not in Game.adjacent_rooms(self.pl1.current_room):
-                choice = input('Fire an arrow into which room? ')
+                await ctx.send('Fire an arrow into which room?')
+                message = await self.client.wait_for('message', check=lambda message: message.author == ctx.author)
+                choice = message.content
                 try:
                     int(choice)
                 except ValueError:
@@ -145,13 +154,13 @@ class Game:
 
             if choice == self.w1.current_room:
                 print()
-                print('You shot the Wumpus')
+                await ctx.send('You shot the Wumpus')
                 self.pl1.isWinner = True
 
             else:
                 self.pl1.arrows -= 1
                 print()
-                print('You missed...\n' + str(self.pl1.arrows) + ' arrows left...')
+                await ctx.send('You missed...\n' + str(self.pl1.arrows) + ' arrows left...')
                 wumpusmove = random.randint(1, 4)
                 if wumpusmove != 1:
                     rechoose = False

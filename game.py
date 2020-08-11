@@ -1,9 +1,13 @@
 import random
+
+import discord
+
 import bat
 import pit
 import wumpus
 import player
 import asyncio
+
 
 # TODO: Embed all messages and tidy up
 class Game:
@@ -14,6 +18,18 @@ class Game:
     p1 = pit.Pit()
     p2 = pit.Pit()
     w1 = wumpus.Wumpus()
+    pitwarn = False
+    batwarn = False
+    wumpuswarn = False
+    sendembed = False
+    noarrows = False
+    choice_move = None
+    choice_shoot = None
+    wumpusshot = False
+    pitdeath = False
+    wumpusdeath = False
+    endgame = False
+    replay = True
 
     def __init__(self, client):
         self.client = client
@@ -44,6 +60,19 @@ class Game:
 
         while self.w1.current_room == self.pl1.current_room or self.w1.current_room < 0:
             self.w1.current_room = random.choice(self.rooms)
+
+        self.batwarn = False
+        self.pitwarn = False
+        self.wumpuswarn = False
+        self.sendembed = False
+        self.noarrows = False
+        self.choice_move = None
+        self.choice_shoot = None
+        self.wumpusshot = False
+        self.pitdeath = False
+        self.wumpusdeath = False
+        self.endgame = False
+        self.replay = True
 
     @staticmethod
     def adjacent_rooms(current_room):
@@ -85,35 +114,42 @@ class Game:
         '''
 
     async def gameloop(self, ctx):
-
         if self.pl1.arrows == 0:  # Check if player can continue or if they are out of arrows
-            await ctx.send('You ran out of arrows...')
+            # await ctx.send('You ran out of arrows...')
+            self.noarrows = True
             self.pl1.isAlive = False
+            await self.endgamel(ctx)
             return
         # inform the player of their room, adjacent rooms, and adjacent hazards, and arrow count
-        await ctx.send('You are in room ' + str(self.pl1.current_room))
-        await ctx.send('The rooms next to you are ' + str(Game.adjacent_rooms(self.pl1.current_room)))
-        await ctx.send('You have ' + str(self.pl1.arrows) + ' arrows')
+        # await ctx.send('You are in room ' + str(self.pl1.current_room))
+        # await ctx.send('The rooms next to you are ' + str(Game.adjacent_rooms(self.pl1.current_room)))
+        # await ctx.send('You have ' + str(self.pl1.arrows) + ' arrows')
         if self.p1.current_room in Game.adjacent_rooms(self.pl1.current_room) or self.p2.current_room in \
                 Game.adjacent_rooms(self.pl1.current_room):
-            await ctx.send('You can feel a gust of air nearby...')
+            # await ctx.send('You can feel a gust of air nearby...')
+            self.pitwarn = True
         if self.b1.current_room in Game.adjacent_rooms(self.pl1.current_room) or self.b2.current_room in \
                 Game.adjacent_rooms(self.pl1.current_room):
-            await ctx.send('You hear flapping in the distance...')
+            # await ctx.send('You hear flapping in the distance...')
+            self.batwarn = True
         if self.w1.current_room in Game.adjacent_rooms(self.pl1.current_room):
-            await ctx.send('You can smell a horrible stench...')
+            # await ctx.send('You can smell a horrible stench...')
+            self.wumpuswarn = True
+
+        await self.embed(ctx)
 
         action = None
         choice = None
-        # Player's turn choice, shoot an arrow or move rooms
-        while str.upper(str(action)) != 'M' and str.upper(str(action)) != 'S':
-            await ctx.send('Shoot or Move? (S/M) ')
-            message = await self.client.wait_for('message', check=lambda
-                message: message.author == ctx.author and message.content.lower() in ['m', 's'])
-            action = message.content
 
-        if str.upper(str(action)) == 'M':
-            while choice not in Game.adjacent_rooms(self.pl1.current_room):
+        # Player's turn choice, shoot an arrow or move rooms
+        # while str.upper(str(action)) != 'M' and str.upper(str(action)) != 'S':
+        #     await ctx.send('Shoot or Move? (S/M) ')
+        #     message = await self.client.wait_for('message', check=lambda
+        #         message: message.author == ctx.author and message.content.lower() in ['m', 's'])
+        #     action = message.content
+
+        if self.choice_move:
+            while choice not in Game.adjacent_rooms(self.pl1.current_room) and self.pl1.isAlive:
                 await ctx.send('Move to which room?')
                 message = await self.client.wait_for('message', check=lambda message: message.author == ctx.author)
                 choice = message.content
@@ -130,18 +166,25 @@ class Game:
                 await ctx.send('A bat picked you up and moved you to a random room!')
                 self.pl1.current_room = random.choice(self.rooms)
 
+
             elif choice == self.p1.current_room or choice == self.p2.current_room:
                 print()
                 await ctx.send('You fell down a pit...')
                 self.pl1.isAlive = False
+                self.pitdeath = True
+                await self.endgamel(ctx)
+                return
 
             elif choice == self.w1.current_room:
                 await ctx.send('You stepped into the Wumpus\'s room and startled him!')
                 print()
                 self.pl1.isAlive = False
+                self.wumpusdeath = True
+                await self.endgamel(ctx)
+                return
 
-        elif str.upper(str(action)) == 'S':
-            while choice not in Game.adjacent_rooms(self.pl1.current_room):
+        elif self.choice_shoot:
+            while choice not in Game.adjacent_rooms(self.pl1.current_room) and self.pl1.isAlive:
                 await ctx.send('Fire an arrow into which room?')
                 message = await self.client.wait_for('message', check=lambda message: message.author == ctx.author)
                 choice = message.content
@@ -154,8 +197,11 @@ class Game:
 
             if choice == self.w1.current_room:
                 print()
-                await ctx.send('You shot the Wumpus')
+                #await ctx.send('You shot the Wumpus')
+                self.wumpusshot = True
                 self.pl1.isWinner = True
+                await self.endgamew(ctx)
+                return
 
             else:
                 self.pl1.arrows -= 1
@@ -171,21 +217,116 @@ class Game:
                         elif self.w1.current_room == self.pl1.current_room:
                             rechoose = True
 
-    def replay(self):
-        playagain = input('Play again? (Y/N)')
-        if str.upper(playagain) == 'Y':
-            self.pl1.isWinner = False
-            self.pl1.isAlive = True
-            self.pl1.arrows = 5
-            self.reset()
-            self.initial()
-        elif str.upper(playagain) == 'N':
-            exit()
+        self.choice_shoot = None
+        self.choice_move = None
 
-    def endgamel(self):
-        print('You Lose!')
-        self.replay()
+    async def embed(self, ctx):
+        if self.pl1.isAlive:
+            warn = None
+            if self.pitwarn:
+                warn = 'You can feel a gust of air nearby...'
+                self.pitwarn = False
+            elif self.batwarn:
+                warn = 'You hear flapping in the distance...'
+                self.batwarn = False
+            elif self.wumpuswarn:
+                warn = 'You can smell a horrible stench...'
+                self.wumpuswarn = False
 
-    def endgamew(self):
-        print('You Won!')
-        self.replay()
+            game_embed = discord.Embed(
+                colour=discord.Colour.greyple()
+            )
+            game_embed.set_author(name='Hunt The Wumpus')
+            game_embed.add_field(name=str(ctx.author) + '\'s game',
+                                 value='You are in room ' + str(
+                                     self.pl1.current_room) + '\nThe rooms next to you are ' + str(
+                                     self.adjacent_rooms(self.pl1.current_room)) + '\nYou have ' + str(
+                                     self.pl1.arrows) + ' arrows')
+            if warn:
+                game_embed.add_field(name='Warnings:', value=warn)
+
+            shoot = '🏹'
+            move = '🧭'
+            msg = await ctx.send(embed=game_embed)
+            await msg.add_reaction(shoot)
+            await msg.add_reaction(move)
+
+            def check(reaction, user):
+                return user == ctx.author and str(reaction.emoji) in ['🏹', '🧭']
+
+            loop = 0
+            while loop == 0:
+                reaction, user = await self.client.wait_for('reaction_add', check=check)
+                if reaction.emoji == shoot:
+                    self.choice_shoot = True
+                    loop = 1
+                elif reaction.emoji == move:
+                    self.choice_move = True
+                    loop = 1
+
+    async def endgamel(self, ctx):
+        replay_embed = discord.Embed(
+            colour=discord.Colour.red()
+        )
+        replay_embed.set_author(name='Hunt The Wumpus')
+        if self.pitdeath:
+            replay_embed.add_field(name=str(ctx.author) + '\'s game',
+                               value='You Lose!\n'
+                                     'You fell into a pit!\n'
+                                     'Play again?')
+        elif self.wumpusdeath:
+            replay_embed.add_field(name=str(ctx.author) + '\'s game',
+                                   value='You Lose!\n'
+                                         'You startled the Wumpus!\n'
+                                         'Play again?')
+        elif self.noarrows:
+            replay_embed.add_field(name=str(ctx.author) + '\'s game',
+                                   value='You Lost!\n'
+                                         'You ran out of arrows!\n'
+                                         'Play again?')
+        y = '✅'
+        n = '❌'
+        msg = await ctx.send(embed=replay_embed)
+        await msg.add_reaction(y)
+        await msg.add_reaction(n)
+
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ['✅', '❌']
+
+        loop = 0
+        while loop == 0:
+            reaction, user = await self.client.wait_for('reaction_add', check=check)
+            if reaction.emoji == y:
+                loop = 1
+            elif reaction.emoji == n:
+                self.replay = False
+                self.endgame = True
+                loop = 1
+
+    async def endgamew(self, ctx):
+        replay_embed = discord.Embed(
+            colour=discord.Colour.green()
+        )
+        replay_embed.set_author(name='Hunt The Wumpus')
+        replay_embed.add_field(name=str(ctx.author) + '\'s game',
+                               value='You have Won!\n'
+                                     'You shot the Wumpus!\n'
+                                     'Play again?')
+        y = '✅'
+        n = '❌'
+        msg = await ctx.send(embed=replay_embed)
+        await msg.add_reaction(y)
+        await msg.add_reaction(n)
+
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ['✅', '❌']
+
+        loop = 0
+        while loop == 0:
+            reaction, user = await self.client.wait_for('reaction_add', check=check)
+            if reaction.emoji == y:
+                loop = 1
+            elif reaction.emoji == n:
+                self.replay = False
+                self.endgame = True
+                loop = 1

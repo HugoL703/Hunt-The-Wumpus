@@ -1,23 +1,29 @@
 import discord
+from discord import Message
+
 import bat, pit, player, wumpus
 import random
 import os
 import game
 from dotenv import load_dotenv
 from discord.ext import commands
+from discord.ext.commands import has_permissions, MissingPermissions
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
 
 client = commands.Bot(command_prefix='w!')
 current_player = None
+playing = False
+
 
 @client.event
 async def on_ready():
     print(f'{client.user} connected.')
+    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="w!help"))
 
 
-@client.command()
+@client.command(help='Shows how to play the game')
 async def rules(ctx):
     print('LOG: ' + str(ctx.author) + ' requested "Ruleset"')
     help_embed = discord.Embed(
@@ -27,7 +33,7 @@ async def rules(ctx):
     )
 
     help_embed.set_footer(text='Requested by ' + str(ctx.author))
-    help_embed.set_author(name='How To Play Hunt the Wumpus', icon_url='https://cdn.discordapp.com/emojis/732687928337104977.png?v=1')
+    help_embed.set_author(name='How To Play Hunt the Wumpus')
     help_embed.add_field(name='Overview', value='The aim of the game is to shoot the Wumpus with one of your five '
                                                 'arrows, however this is not as easy as it may sound. Each turn you '
                                                 'can move into an adjacent cave or fire an arrow into the darkness.',
@@ -41,7 +47,7 @@ async def rules(ctx):
     await ctx.send(embed=help_embed)
 
 
-@client.command()
+@client.command(help='Shows a mostly original ruleset')
 async def ogrules(ctx):
     print('LOG: ' + str(ctx.author) + ' requested "Texas Instruments Ruleset"')
     await ctx.send('These are the original instructions, only modified to better reflect the bot\'s rules')
@@ -60,33 +66,41 @@ async def ogrules(ctx):
                    'ROOM AWAY FROM WUMPUS OR ANY HAZARD, THE COMPUTER SAYS:\n\nWUMPUS - \'YOU CAN SMELL A HORRIBLE STENCH...\'\n\nBAT - '
                    '\'YOU HEAR FLAPPING IN THE DISTANCE...\'\n\nPIT - \'YOU CAN FEEL A GUST OF AIR NEARBY...\'```')
 
+# TODO: Player queue?
 
-@client.command()
-async def sgame(ctx):
+
+@client.command(help='Start playing a game!')
+async def start(ctx):
+    global current_player
+    global playing
     g = game.Game(client)
-    g.initial()
-    while g.pl1.isAlive and not g.pl1.isWinner:
-        await g.gameloop(ctx)
+    playing = True
+    print('LOG: ' + str(ctx.author) + ' requested "start"')
+    while playing:
+        if current_player is None:
+            current_player = ctx.author
+            g.pl1.isAlive = True
+            g.pl1.isWinner = False
+            await ctx.send('*DEBUG:* ' + str(ctx.author) + ' is playing.')
+            while playing:
+                g.initial()
+                while g.pl1.isAlive and not g.pl1.isWinner:
+                    await g.gameloop(ctx)
+                if g.endgame:
+                    current_player = None
+                    playing = False
+        elif current_player != ctx.author:
+            await ctx.send('Sorry, ' + str(current_player) + ' is currently playing. Please wait for them to finish!')
+        elif ctx.author == current_player:
+            await ctx.send('You are already playing!')
 
-# TODO: Sortout playing commands and better tell the player who is currently in game. Player queue?
 
-@client.command()
-async def play(ctx):
+@client.command(help='End your game prematurely')
+async def end(ctx):
     global current_player
-    print('LOG: ' + str(ctx.author) + ' requested "PLAY"')
-    if current_player is None:
-        current_player = ctx.author
-        await ctx.send('@' + str(ctx.author) + ' is registered as playing.')
-    elif ctx.author == current_player:
-        await ctx.send('You are already playing!')
-    else:
-        await ctx.send('Sorry @' + str(ctx.author) + ', @' + str(current_player) + ' is currently playing.')
-
-
-@client.command()
-async def quit(ctx):
-    global current_player
-    print('LOG: ' + str(ctx.author) + ' requested "QUIT"')
+    global playing
+    g = game.Game(client)
+    print('LOG: ' + str(ctx.author) + ' requested "end"')
     if current_player is None:
         await ctx.send('No one is playing!')
     elif current_player != ctx.author:
@@ -94,5 +108,56 @@ async def quit(ctx):
     else:
         await ctx.send('Game ended')
         current_player = None
+        playing = False
+        g.pl1.isAlive = False
+
+
+@client.command(name='sudoend', help='Forces the current game to end, needs Admin permissions')
+@has_permissions(administrator=True)
+async def _sudoend(ctx):
+    global current_player
+    global playing
+    g = game.Game(client)
+    if playing:
+        print('LOG: ' + str(ctx.author) + ' requested "sudo end". This ended the game of ' + str(current_player))
+        playing = False
+        g.pl1.isAlive = False
+        await ctx.send('The admin, ' + str(ctx.author) + ', has ended the current game (' + str(current_player) + ')')
+        current_player = None
+    else:
+        print('LOG: ' + str(ctx.author) + ' requested "sudo end", but no game was active')
+        await ctx.send('No active game!')
+
+
+@_sudoend.error
+async def sudoend_error(ctx, error):
+    if isinstance(error, discord.ext.commands.errors.MissingPermissions):
+        print('LOG: ' + str(ctx.author) + ' requested "sudo end", but have insufficient perms ')
+        await ctx.send('You don\'t have the permissions to do this!')
+
+
+@client.command()
+async def reacttest(ctx):
+    emoji1 = '👍'
+    emoji2 = '👎'
+    msg = await ctx.send('Test message for reactions')
+    await msg.add_reaction(emoji1)
+    await msg.add_reaction(emoji2)
+
+    def check(reaction, user):
+        return user == ctx.author and str(reaction.emoji) in ['👍', '👎']
+
+    loop = 0
+    while loop == 0:
+            reaction, user = await client.wait_for('reaction_add', check=check)
+            if reaction.emoji == emoji1:
+                await ctx.send('Yes')
+                loop = 1
+            elif reaction.emoji == emoji2:
+                await ctx.send('No')
+                loop = 1
+
+
+
 
 client.run(token)

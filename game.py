@@ -44,6 +44,7 @@ class Game:
 
     # Place everything in rooms. Two of the same hazard cannot exist in the same room, and the player starts safe
     def initial(self):
+        self.reset()
         self.pl1.current_room = random.choice(self.rooms)
 
         while self.b1.current_room == self.pl1.current_room or self.b1.current_room < 0:
@@ -61,6 +62,9 @@ class Game:
         while self.w1.current_room == self.pl1.current_room or self.w1.current_room < 0:
             self.w1.current_room = random.choice(self.rooms)
 
+        self.pl1.isAlive = True
+        self.pl1.isWinner = False
+        self.pl1.arrows = 5
         self.batwarn = False
         self.pitwarn = False
         self.wumpuswarn = False

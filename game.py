@@ -222,16 +222,25 @@ class Game:
 
     async def embed(self, ctx):
         if self.pl1.isAlive:
-            warn = None
+            warn = 0 # 0=none, 1=pit, 2=bat, 3=pitbat. 4=wump, 5=wumppit, 6=wumpbat, 7=all
             if self.pitwarn:
-                warn = 'You can feel a gust of air nearby...'
+                warn += 1
                 self.pitwarn = False
-            elif self.batwarn:
-                warn = 'You hear flapping in the distance...'
+            if self.batwarn:
+                warn += 2
                 self.batwarn = False
-            elif self.wumpuswarn:
-                warn = 'You can smell a horrible stench...'
+            if self.wumpuswarn:
+                warn += 4
                 self.wumpuswarn = False
+            message = {
+                1: 'You can feel a gust of air nearby...',
+                2: 'You hear flapping in the distance...',
+                3: 'You can feel a gust of air nearby...\nYou hear flapping in the distance...',
+                4: 'You can smell a horrible stench...',
+                5: 'You can smell a horrible stench...\nYou can feel a gust of air nearby...',
+                6: 'You can smell a horrible stench...\nYou hear flapping in the distance...',
+                7: 'You can smell a horrible stench...\nYou can feel a gust of air nearby...\nYou hear flapping in the distance... '
+            }
 
             game_embed = discord.Embed(
                 colour=discord.Colour.greyple()
@@ -242,8 +251,8 @@ class Game:
                                      self.pl1.current_room) + '\nThe rooms next to you are ' + str(
                                      self.adjacent_rooms(self.pl1.current_room)) + '\nYou have ' + str(
                                      self.pl1.arrows) + ' arrows')
-            if warn:
-                game_embed.add_field(name='Warnings:', value=warn)
+            if warn > 0:
+                game_embed.add_field(name='Warnings:', value=message[warn])
 
             shoot = '🏹'
             move = '🧭'
@@ -297,6 +306,7 @@ class Game:
         while loop == 0:
             reaction, user = await self.client.wait_for('reaction_add', check=check)
             if reaction.emoji == y:
+                self.pl1.isAlive = False
                 loop = 1
             elif reaction.emoji == n:
                 self.replay = False
@@ -325,8 +335,10 @@ class Game:
         while loop == 0:
             reaction, user = await self.client.wait_for('reaction_add', check=check)
             if reaction.emoji == y:
+                self.pl1.isAlive = False
                 loop = 1
             elif reaction.emoji == n:
                 self.replay = False
                 self.endgame = True
                 loop = 1
+

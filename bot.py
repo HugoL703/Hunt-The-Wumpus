@@ -82,7 +82,7 @@ async def start(ctx):
             g.pl1.isAlive = True
             g.pl1.isWinner = False
             await ctx.send('*DEBUG:* ' + str(ctx.author) + ' is playing.')
-            while playing:
+            while g.replay:
                 g.initial()
                 while g.pl1.isAlive and not g.pl1.isWinner:
                     await g.gameloop(ctx)

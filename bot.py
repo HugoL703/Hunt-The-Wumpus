@@ -1,13 +1,9 @@
 import discord
-from discord import Message
-
-import bat, pit, player, wumpus
-import random
 import os
 import game
 from dotenv import load_dotenv
 from discord.ext import commands
-from discord.ext.commands import has_permissions, MissingPermissions
+from discord.ext.commands import has_permissions
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -66,8 +62,6 @@ async def ogrules(ctx):
                    'ROOM AWAY FROM WUMPUS OR ANY HAZARD, THE COMPUTER SAYS:\n\nWUMPUS - \'YOU CAN SMELL A HORRIBLE STENCH...\'\n\nBAT - '
                    '\'YOU HEAR FLAPPING IN THE DISTANCE...\'\n\nPIT - \'YOU CAN FEEL A GUST OF AIR NEARBY...\'```')
 
-# TODO: Player queue?
-
 
 @client.command(help='Start playing a game!')
 async def start(ctx):
@@ -93,6 +87,7 @@ async def start(ctx):
             await ctx.send('Sorry, ' + str(current_player) + ' is currently playing. Please wait for them to finish!')
         elif ctx.author == current_player:
             await ctx.send('You are already playing!')
+    del g
 
 
 @client.command(help='End your game prematurely')
@@ -106,10 +101,10 @@ async def end(ctx):
     elif current_player != ctx.author:
         await ctx.send('You are not playing!')
     else:
-        await ctx.send('Game ended')
-        current_player = None
         playing = False
-        g.pl1.isAlive = False
+        current_player = None
+        g.earlyend = True
+        await g.endgamel(ctx)
 
 
 @client.command(name='sudoend', help='Forces the current game to end, needs Admin permissions')

@@ -5,9 +5,10 @@ import bat, pit, player, wumpus
 import random
 import os
 import game
-from dotenv import load_dotenv
 from discord.ext import commands
 from discord.ext.commands import has_permissions, MissingPermissions
+from dotenv import load_dotenv
+
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -66,8 +67,6 @@ async def ogrules(ctx):
                    'ROOM AWAY FROM WUMPUS OR ANY HAZARD, THE COMPUTER SAYS:\n\nWUMPUS - \'YOU CAN SMELL A HORRIBLE STENCH...\'\n\nBAT - '
                    '\'YOU HEAR FLAPPING IN THE DISTANCE...\'\n\nPIT - \'YOU CAN FEEL A GUST OF AIR NEARBY...\'```')
 
-# TODO: Player queue?
-
 
 @client.command(help='Start playing a game!')
 async def start(ctx):
@@ -89,27 +88,32 @@ async def start(ctx):
                 if g.endgame:
                     current_player = None
                     playing = False
+                if not playing or not g.pl1.isAlive or g.pl1.isWinner:
+                    return
         elif current_player != ctx.author:
             await ctx.send('Sorry, ' + str(current_player) + ' is currently playing. Please wait for them to finish!')
         elif ctx.author == current_player:
             await ctx.send('You are already playing!')
+    del g
 
+
+g = game.Game(client)
 
 @client.command(help='End your game prematurely')
 async def end(ctx):
     global current_player
     global playing
-    g = game.Game(client)
     print('LOG: ' + str(ctx.author) + ' requested "end"')
     if current_player is None:
         await ctx.send('No one is playing!')
     elif current_player != ctx.author:
         await ctx.send('You are not playing!')
     else:
-        await ctx.send('Game ended')
-        current_player = None
         playing = False
+        current_player = None
         g.pl1.isAlive = False
+        g.earlyend = True
+        await g.endgamel(ctx)
 
 
 @client.command(name='sudoend', help='Forces the current game to end, needs Admin permissions')

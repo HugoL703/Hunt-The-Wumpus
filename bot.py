@@ -1,8 +1,4 @@
 import discord
-from discord import Message
-
-import bat, pit, player, wumpus
-import random
 import os
 import game
 from discord.ext import commands
